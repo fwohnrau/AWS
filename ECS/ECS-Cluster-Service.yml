@@ -1,0 +1,357 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template to create ECS Services with EC2
+
+Parameters:
+  ENV:
+    Type: String
+    Description: Envrionement used by the Cluster / container
+    Default: 'DEV'
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the ECS instances.
+    Default: 'UdemmyEC2KeyPair'
+  DesiredCapacity:
+    Type: Number
+    Default: 2
+    Description: Number of instances to launch in your ECS cluster.
+  ServiceMaxSize:
+    Type: Number
+    Default: 2
+    Description: Maximum number of instances that can be launched in your ECS cluster.
+  EC2MaxSize:
+    Type: Number
+    Default: 4
+    Description: Maximum number of instances that can be launched in your ECS cluster.
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues: [t2.micro]
+    ConstraintDescription: Please choose a valid instance type.
+
+Mappings:
+  AWSRegionToAMI:
+    us-east-1:
+      AMIID: ami-eca289fb
+    us-east-2:
+      AMIID: ami-446f3521
+    us-west-1:
+      AMIID: ami-9fadf8ff
+    us-west-2:
+      AMIID: ami-7abc111a
+    eu-west-1:
+      AMIID: ami-a1491ad2
+    eu-central-1:
+      AMIID: ami-54f5303b
+    ap-northeast-1:
+      AMIID: ami-9cd57ffd
+    ap-southeast-1:
+      AMIID: ami-a900a3ca
+    ap-southeast-2:
+      AMIID: ami-5781be34
+
+Transform:
+  - 'AWS::CodeDeployBlueGreen'
+
+Hooks:
+  CodeDeployBlueGreenHook:
+    Type: 'AWS::CodeDeploy::BlueGreen'
+    Properties:
+      TrafficRoutingConfig:
+        Type: TimeBasedCanary
+        TimeBasedCanary:
+           StepPercentage: 15
+           BakeTimeMins: 5
+      Applications:
+        - Target:
+            Type: 'AWS::ECS::Service'
+            LogicalID: EcommerceService
+          ECSAttributes:
+            TaskDefinitions:
+              - BlueTaskDefinition
+              - GreenTaskDefinition
+            TaskSets:
+              - BlueTaskSet
+              - GreenTaskSet
+            TrafficRouting:
+              ProdTrafficRoute:
+                Type: 'AWS::ElasticLoadBalancingV2::Listener'
+                LogicalID: ALBLoadBalancer
+              TargetGroups:
+                - ALBTargetGroupBlue
+                - ALBTargetGroupGreen
+
+Resources:
+
+  ECSCluster:
+      Type: AWS::ECS::Cluster
+      Properties:
+        ClusterName: myECSCluster
+        #Tags:
+          #- ENV: !Ref 'ENV'
+
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: ECS-ALB-SecurityGroup
+      GroupDescription: Security Group for loadbalancer on ECS
+      VpcId: !ImportValue 'VPC'
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          CidrIp: '0.0.0.0/0'
+          FromPort: '80'
+          ToPort: '80'
+
+  ALBLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: ECS-ALB-services
+      Type: application
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '30'
+      Subnets:
+        - !ImportValue 'Subnet1'
+        - !ImportValue 'Subnet2'
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+
+  ALBLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALBLoadBalancer
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSTargetGroupBlue
+
+  ALBListenerRuleBlue:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref ECSTargetGroupBlue
+                Weight: 1
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /polls*
+            - /admin*
+      ListenerArn: !Ref ALBLoadBalancerListener
+      Priority: 1
+
+  ECSTargetGroupBlue:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: ECSTargetGroupBlue
+      VpcId: !ImportValue 'VPC'
+      Protocol: HTTP
+      Port: 80
+      Matcher:
+        HttpCode: 200-399
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /admin
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 10
+      UnhealthyThresholdCount: 4
+
+  ECSTargetGroupGreen:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: ECSTargetGroupGreen
+      VpcId: !ImportValue 'VPC'
+      Protocol: HTTP
+      Port: 80
+      Matcher:
+        HttpCode: 200-399
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /admin
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 10
+      UnhealthyThresholdCount: 4
+
+
+  CloudWatchLogsGroupEcommerce:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: django-ecommerce-cf
+
+  ECSContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: ECS-Container-SecurityGroup
+      GroupDescription: Security Group for ECS container
+      VpcId: !ImportValue 'VPC'
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          IpProtocol: 'tcp'
+          FromPort: '8080'
+          ToPort: '8080'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+  BlueTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Join [ '', [ !Ref 'AWS::StackName', my-ecommerce-app ] ]
+      NetworkMode: bridge
+      RequiresCompatibilities:
+        - EC2
+      ContainerDefinitions:
+        - Name: my-ecommerce
+          Image: 982779134822.dkr.ecr.eu-west-1.amazonaws.com/mydjango-ecommerce:latest
+          Cpu: '1'
+          Memory: '300'
+          Essential: 'true'
+          PortMappings:
+            - ContainerPort: 8080
+              HostPort: 80
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref 'CloudWatchLogsGroupEcommerce'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: my-ecommerce
+
+  BlueTaskSet:
+    Type: 'AWS::ECS::TaskSet'
+    Properties:
+      Cluster: !Ref ECSCluster
+      LaunchType: EC2
+      Scale:
+        Unit: PERCENT
+        Value: 1
+      Service: !Ref EcommerceService
+      TaskDefinition: !Ref BlueTaskDefinition
+      LoadBalancers:
+        - ContainerName: my-ecommerce
+          ContainerPort: 8080
+          TargetGroupArn: !Ref ECSTargetGroupBlue
+
+  PrimaryTaskSet:
+    Type: 'AWS::ECS::PrimaryTaskSet'
+    Properties:
+      Cluster: !Ref ECSCluster
+      Service: !Ref EcommerceService
+      TaskSetId: !GetAtt
+        - BlueTaskSet
+        - Id
+
+  EcommerceService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: ecommerce-service
+      Cluster: !Ref ECSCluster
+      DesiredCount: !Ref DesiredCapacity
+      #LoadBalancers:
+      #  - ContainerName: my-ecommerce
+      #    ContainerPort: 8080
+      #    TargetGroupArn: !Ref 'ECSTargetGroup'
+      DeploymentController:
+        Type: EXTERNAL
+        #Type: CODE_DEPLOY
+
+
+  ECSAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: ECS-eu-west-1a-1b
+      VPCZoneIdentifier:
+        - !ImportValue 'Subnet1'
+        - !ImportValue 'Subnet2'
+      LaunchConfigurationName: !Ref 'ContainerInstances'
+      MinSize: '1'
+      MaxSize: !Ref 'EC2MaxSize'
+      DesiredCapacity: !Ref 'DesiredCapacity'
+    #CreationPolicy:
+      #ResourceSignal:
+        #Timeout: PT15M
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: 'true'
+
+  ContainerInstances:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [ AWSRegionToAMI, !Ref 'AWS::Region', AMIID ]
+      SecurityGroups: [ !Ref ECSContainerSecurityGroup ]
+      InstanceType: !Ref 'InstanceType'
+      IamInstanceProfile: !Ref 'EC2InstanceProfile'
+      KeyName: !Ref 'KeyName'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          echo ECS_CLUSTER='myECSCluster' >> /etc/ecs/ecs.config
+          yum install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !ImportValue 'EC2Role'
+
+  AutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ application-autoscaling.amazonaws.com, ec2.amazonaws.com ]
+            Action: [ 'sts:AssumeRole' ]
+      Path: /
+      Policies:
+        - PolicyName: myecs-service-autoscaling
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: [ 'application-autoscaling:*', 'cloudwatch:DescribeAlarms', 'cloudwatch:PutMetricAlarm',
+                          'ecs:DescribeServices', 'ecs:UpdateService' ]
+                Resource: '*'
+
+  ServiceScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    #DependsOn: EcommerceService
+    Properties:
+      MinCapacity: !Ref DesiredCapacity
+      MaxCapacity: !Ref 'ServiceMaxSize'
+      ResourceId: 'service/myECSCluster/ecommerce-service'
+      RoleARN: !GetAtt [AutoScalingRole, Arn]
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  ServiceScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: AStepPolicy
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: PercentChangeInCapacity
+        Cooldown: 60
+        MetricAggregationType: Average
+        StepAdjustments:
+          - MetricIntervalLowerBound: 0
+            ScalingAdjustment: 200
+
+Outputs:
+  PollsEndPoint:
+    Description: Polls application end-point
+    Value: !Join ['', ['http://',  !GetAtt ALBLoadBalancer.DNSName, ':80/polls' ]]
+    Export:
+      Name: pollsEndPoint
