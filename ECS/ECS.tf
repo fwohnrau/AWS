@@ -50,7 +50,7 @@ resource "aws_iam_role" "Terraform-ECS-EC2-Role" {
     {
       "Action": "sts:AssumeRole",
       "Principal": {
-        "Service": "ec2.amazonaws.com"
+        "Service": ["ec2.amazonaws.com","ecs.amazonaws.com"]
       },
       "Effect": "Allow",
       "Sid": ""
@@ -77,12 +77,12 @@ resource "aws_iam_policy" "Terraform-Ecommerce-ECS-policy" {
   policy      =  file("Ecommerce-ECS-Policy.json")
 }
 
-resource "aws_iam_role_policy_attachment" "Terraform-Ecommerce-ECS-ECR-policy" {
+resource "aws_iam_role_policy_attachment" "Terraform-Ecommerce-ECS-ECR-policy-Attachement" {
   role       = aws_iam_role.Terraform-ECS-EC2-Role.name
   policy_arn = aws_iam_policy.Terraform-Ecommerce-ECS-ECR-policy.arn
 }
 
-resource "aws_iam_role_policy_attachment" "Terraform-Ecommerce-ECS-policy" {
+resource "aws_iam_role_policy_attachment" "Terraform-Ecommerce-ECS-policy-Attachement" {
   role       = aws_iam_role.Terraform-ECS-EC2-Role.name
   policy_arn = aws_iam_policy.Terraform-Ecommerce-ECS-policy.arn
 }
@@ -91,6 +91,42 @@ resource "aws_iam_instance_profile" "Terraform-ECS-InstanceProfile"{
   name = "Terraform-ECS-InstanceProfile"
   role = aws_iam_role.Terraform-ECS-EC2-Role.name
   }
+
+resource "aws_iam_role" "Terraform-ECS-Autoscalling-Role" {
+  name = "Terraform-ECS-Autoscalling-Role"
+
+   assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": ["ec2.amazonaws.com","ecs.amazonaws.com"]
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+
+  ]
+}
+EOF
+
+  tags = {
+    tag-key = "tag-value"
+  }
+}
+
+resource "aws_iam_policy" "Terraform-ECS-Autoscalling-policy" {
+  name        = "Terraform-ECS-Autoscalling-policy"
+  description = "Policy to maintain container Ecommerce docker image"
+  policy      =  file("Ecommerce-ECR-Policy.json")
+}
+
+resource "aws_iam_role_policy_attachment" "Terraform-ECS-Autoscalling-policy-Attachement" {
+  role       = aws_iam_role.Terraform-ECS-Autoscalling-Role.name
+  policy_arn = aws_iam_policy.Terraform-ECS-Autoscalling-policy.arn
+}
 
 #AutoScalling
 resource "aws_autoscaling_group" "myECSAutoScallingGroup" {
@@ -105,10 +141,40 @@ resource "aws_autoscaling_group" "myECSAutoScallingGroup" {
 resource "aws_launch_configuration" "myECSLaunchConfigruation" {
   image_id = var.ec2AMI
   instance_type = var.instanceType
+  associate_public_ip_address = true
   security_groups = [aws_security_group.Terraform-Autoscalling-EC2-SG.id]
   iam_instance_profile = aws_iam_instance_profile.Terraform-ECS-InstanceProfile.arn
   key_name = var.keyName
   user_data = data.template_cloudinit_config.myECSUserData.rendered
+}
+
+resource "aws_appautoscaling_target" "myECSAutoScallingTarget" {
+  max_capacity       = var.desiredCapacity
+  min_capacity       = var.autoscallingMaxSize
+  resource_id        = "service/${var.clusterName}/${aws_ecs_service.Ecommerce-Service.id}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+  role_arn = aws_iam_role.Terraform-ECS-Autoscalling-Role.arn
+}
+
+resource "aws_appautoscaling_policy" "myECSAutoScallingPolicy" {
+  name               = "AStepPolicy"
+  policy_type        = "StepsScaling"
+  resource_id         = aws_appautoscaling_target.myECSAutoScallingTarget.id
+  scalable_dimension = aws_appautoscaling_target.myECSAutoScallingTarget.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.myECSAutoScallingTarget.service_namespace
+
+  step_scaling_policy_configuration {
+    adjustment_type = "PercentChangeInCapacity"
+    cooldown = 60
+    metric_aggregation_type = "Average"
+
+    step_adjustment {
+      metric_interval_upper_bound = 0
+      scaling_adjustment          = 200
+    }
+
+  }
 }
 
 #Application loadbalancer
@@ -116,7 +182,7 @@ resource "aws_lb" "myEcommerALB" {
   name               = "myEcommerALB"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.Terraform-myEcommerce-ALB-SG]
+  security_groups    = [aws_security_group.Terraform-myEcommerce-ALB-SG.id]
   subnets            = [var.subnet_primary_1, var.subnet_primary_2]
 
   enable_deletion_protection = false
@@ -130,13 +196,13 @@ resource "aws_lb_listener" "myEcommerALBListener" {
   load_balancer_arn = aws_lb.myEcommerALB.arn
     #port = "443"
     port = "80"
-    protocol = "HTTPS"
+    protocol = "HTTP"
     #ssl_policy = "ELBSecurityPolicy-2016-08"
     #certificate_arn = "arn:aws:iam::187416307283:server-certificate/test_cert_rab3wuqwgja25ct3n4jdj2tzu4"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.myEcommerTargetGroupBlue
+    target_group_arn = aws_lb_target_group.myEcommerTargetGroupBlue.arn
   }
 }
 
@@ -146,7 +212,7 @@ resource "aws_lb_listener_rule" "myEcommerALBListenerRule" {
 
   action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.myEcommerTargetGroupBlue
+    target_group_arn = aws_lb_target_group.myEcommerTargetGroupGreen.arn
   }
 
   condition {
@@ -202,51 +268,30 @@ resource "aws_lb_target_group" "myEcommerTargetGroupGreen" {
 }
 
 
-
 #Create ECS cluster
 resource "aws_ecs_cluster" "myECSCluster" {
-  name  = "myECSCluster"
+  name  = var.clusterName
   #capacity_providers = []
   }
 
-#Create Task
-resource "aws_ecs_task_definition" "ecommerceTask" {
+
+resource "aws_ecs_task_definition" "ecommerceTaskBlue" {
   family = "ecommerceTask"
   network_mode = "bridge"
   requires_compatibilities = ["EC2"]
-  #container_definitions = file("task-definitions/service.json")
-  container_definitions = <<DEFINITION
-[
-  {
-    "PortMappings":[
-        {
-          "ContainerPort": ${var.conatinerPort},
-          "HostPort": ${var.hostPort}
-        }
-      ],
-    "essential": true,
-    "image": ${var.ecommerce_docker_image}
-    "cpu": 1,
-    "memory": 300,
-    "name": "ecommerceContainer"
-  }
-  "logConfiguration:": [{
-      "logdriver": "aws",
-      "options": [{
-          "awslogs-group" : "Terraform-Ecommerce"
-          "awslogs-stream-prefix": "ecommerceContainer"
-       }],
-    }]
-]
-DEFINITION
-
+  container_definitions = file("ecommerceContainerDefinition.json")
 }
 
+
+
+
+
 resource "aws_ecs_service" "Ecommerce-Service" {
-  name            = "Ecommerce-Task"
+  name            = "Ecommerce-Service"
   cluster         = aws_ecs_cluster.myECSCluster.id
-  task_definition = aws_ecs_task_definition.ecommerceTask.arn
+  task_definition = aws_ecs_task_definition.ecommerceTaskBlue.arn
   desired_count   = 2
+  #deployment_controller = "EXTERNAL"
   #iam_role        = aws_iam_role.foo.arn
   #depends_on      = [aws_iam_role_policy.foo]
 
@@ -256,8 +301,8 @@ resource "aws_ecs_service" "Ecommerce-Service" {
   #}
 
   #load_balancer {
-  #  target_group_arn = aws_lb_target_group.foo.arn
-  #  container_name   = "mongo"
+  #  target_group_arn = aws_lb_target_group.myEcommerTargetGroupBlue.arn
+  #  container_name   = var.conatinerName
   #  container_port   = 8080
   #}
 

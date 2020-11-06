@@ -5,8 +5,8 @@ data "template_cloudinit_config" "myECSUserData"{
   part {
     content = <<EOF
     #!/bin/bash -xe
-    echo ECS_CLUSTER='myECSCluster' >> /etc/ecs/ecs.config
-    yum install -y aws-cfn-bootstrap
+    echo ECS_CLUSTER='${var.clusterName}' >> /etc/ecs/ecs.config
+    start ecs
     EOF
   }
 }

@@ -27,9 +27,20 @@ variable "myGithubCodeStarSourceConnectionArn" {
   default = "arn:aws:codestar-connections:eu-west-1:982779134822:connection/b14693e5-34ce-4e19-a39f-9e11230097ff"
 }
 
+
+variable "clusterName" {
+  default = "ecommerceECSCluster"
+}
+
 variable "EcommerceRepository" {
   default = "fwohnrau/eCommerce-django"
 }
+
+
+variable "conatinerName" {
+  default = "ecommerceContainer"
+}
+
 
 variable "conatinerPort" {
   default = 8080
@@ -62,5 +73,9 @@ variable "autoscallingMaxSize" {
 
 variable "desiredCapacity" {
   default = 2
+}
+
+variable "minCapacity" {
+  default = 1
 }
 
