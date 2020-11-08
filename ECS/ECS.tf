@@ -5,8 +5,8 @@ resource "aws_security_group" "Terraform-Autoscalling-EC2-SG"{
 
   ingress {
     protocol = "tcp"
-    from_port = 8080
-    to_port = 8080
+    from_port = var.containerPort
+    to_port = var.containerPort
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -31,8 +31,8 @@ resource "aws_security_group" "Terraform-myEcommerce-ALB-SG"{
 
   ingress {
     protocol = "tcp"
-    from_port = 80
-    to_port = 80
+    from_port = var.hostPort
+    to_port = var.hostPort
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -65,26 +65,26 @@ EOF
   }
 }
 
-resource "aws_iam_policy" "Terraform-Ecommerce-ECS-ECR-policy" {
+resource "aws_iam_policy" "Terraform-Ecommerce-ECS-ECR" {
   name        = "Terraform-Ecommerce-ECS-ECR-policy"
   description = "Policy to maintain container Ecommerce docker image"
   policy      =  file("Ecommerce-ECR-Policy.json")
 }
 
-resource "aws_iam_policy" "Terraform-Ecommerce-ECS-policy" {
+resource "aws_iam_policy" "Terraform-Ecommerce-ECS" {
   name        = "Terraform-Ecommerce-ECS-policy"
   description = "Policy to run ECS on EC2"
   policy      =  file("Ecommerce-ECS-Policy.json")
 }
 
-resource "aws_iam_role_policy_attachment" "Terraform-Ecommerce-ECS-ECR-policy-Attachement" {
+resource "aws_iam_role_policy_attachment" "Terraform-Ecommerce-ECS-ECR-policy" {
   role       = aws_iam_role.Terraform-ECS-EC2-Role.name
-  policy_arn = aws_iam_policy.Terraform-Ecommerce-ECS-ECR-policy.arn
+  policy_arn = aws_iam_policy.Terraform-Ecommerce-ECS-ECR.arn
 }
 
-resource "aws_iam_role_policy_attachment" "Terraform-Ecommerce-ECS-policy-Attachement" {
+resource "aws_iam_role_policy_attachment" "Terraform-Ecommerce-ECS-policy" {
   role       = aws_iam_role.Terraform-ECS-EC2-Role.name
-  policy_arn = aws_iam_policy.Terraform-Ecommerce-ECS-policy.arn
+  policy_arn = aws_iam_policy.Terraform-Ecommerce-ECS.arn
 }
 
 resource "aws_iam_instance_profile" "Terraform-ECS-InstanceProfile"{
@@ -94,6 +94,43 @@ resource "aws_iam_instance_profile" "Terraform-ECS-InstanceProfile"{
 
 resource "aws_iam_role" "Terraform-ECS-Autoscalling-Role" {
   name = "Terraform-ECS-Autoscalling-Role"
+
+   assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": ["ec2.amazonaws.com","application-autoscaling.amazonaws.com"]
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+
+  ]
+}
+EOF
+
+  tags = {
+    tag-key = "tag-value"
+  }
+}
+
+resource "aws_iam_policy" "Terraform-ECS-Autoscalling" {
+  name        = "Terraform-ECS-Autoscalling-policy"
+  description = "Policy to maintain container Ecommerce docker image"
+  policy      =  file("Ecommerce-ECR-Policy.json")
+}
+
+resource "aws_iam_role_policy_attachment" "Terraform-ECS-Autoscalling" {
+  role       = aws_iam_role.Terraform-ECS-Autoscalling-Role.name
+  policy_arn = aws_iam_policy.Terraform-ECS-Autoscalling.arn
+}
+
+
+resource "aws_iam_role" "Terraform-ECS-Execution-Role" {
+  name = "Terraform-ECS-Execution-Role"
 
    assume_role_policy = <<EOF
 {
@@ -117,28 +154,28 @@ EOF
   }
 }
 
-resource "aws_iam_policy" "Terraform-ECS-Autoscalling-policy" {
-  name        = "Terraform-ECS-Autoscalling-policy"
-  description = "Policy to maintain container Ecommerce docker image"
-  policy      =  file("Ecommerce-ECR-Policy.json")
+resource "aws_iam_policy" "Terraform-ECS-Execution-Role" {
+  name        = "Terraform-ECS-Execution-Role-policy"
+  description = "Policy to run container Ecommerce docker image"
+  policy      =  file("Ecommerce-ECS-Execution.json")
 }
 
-resource "aws_iam_role_policy_attachment" "Terraform-ECS-Autoscalling-policy-Attachement" {
-  role       = aws_iam_role.Terraform-ECS-Autoscalling-Role.name
-  policy_arn = aws_iam_policy.Terraform-ECS-Autoscalling-policy.arn
+resource "aws_iam_role_policy_attachment" "Terraform-ECS-Execution-Role" {
+  role       = aws_iam_role.Terraform-ECS-Execution-Role.name
+  policy_arn = aws_iam_policy.Terraform-ECS-Execution-Role.arn
 }
 
 #AutoScalling
-resource "aws_autoscaling_group" "myECSAutoScallingGroup" {
+resource "aws_autoscaling_group" "AutoScallingGroup" {
     name = "myECSAutoScallingGroup"
     vpc_zone_identifier = [var.subnet_primary_1, var.subnet_primary_2]
     min_size = 1
     max_size = var.autoscallingMaxSize
     desired_capacity = var.desiredCapacity
-    launch_configuration = aws_launch_configuration.myECSLaunchConfigruation.name
+    launch_configuration = aws_launch_configuration.LaunchConfigruation.name
 }
 
-resource "aws_launch_configuration" "myECSLaunchConfigruation" {
+resource "aws_launch_configuration" "LaunchConfigruation" {
   image_id = var.ec2AMI
   instance_type = var.instanceType
   associate_public_ip_address = true
@@ -148,10 +185,10 @@ resource "aws_launch_configuration" "myECSLaunchConfigruation" {
   user_data = data.template_cloudinit_config.myECSUserData.rendered
 }
 
-resource "aws_appautoscaling_target" "myECSAutoScallingTarget" {
+resource "aws_appautoscaling_target" "AutoScallingTarget" {
   max_capacity       = var.desiredCapacity
   min_capacity       = var.autoscallingMaxSize
-  resource_id        = "service/${var.clusterName}/${aws_ecs_service.Ecommerce-Service.id}"
+  resource_id        = "service/${var.clusterName}/${aws_ecs_service.ecommerceService.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
   role_arn = aws_iam_role.Terraform-ECS-Autoscalling-Role.arn
@@ -159,10 +196,10 @@ resource "aws_appautoscaling_target" "myECSAutoScallingTarget" {
 
 resource "aws_appautoscaling_policy" "myECSAutoScallingPolicy" {
   name               = "AStepPolicy"
-  policy_type        = "StepsScaling"
-  resource_id         = aws_appautoscaling_target.myECSAutoScallingTarget.id
-  scalable_dimension = aws_appautoscaling_target.myECSAutoScallingTarget.scalable_dimension
-  service_namespace  = aws_appautoscaling_target.myECSAutoScallingTarget.service_namespace
+  policy_type        = "StepScaling"
+  resource_id         = aws_appautoscaling_target.AutoScallingTarget.id
+  #scalable_dimension = aws_appautoscaling_target.myECSAutoScallingTarget.scalable_dimension
+  #service_namespace  = aws_appautoscaling_target.myECSAutoScallingTarget.service_namespace
 
   step_scaling_policy_configuration {
     adjustment_type = "PercentChangeInCapacity"
@@ -178,8 +215,8 @@ resource "aws_appautoscaling_policy" "myECSAutoScallingPolicy" {
 }
 
 #Application loadbalancer
-resource "aws_lb" "myEcommerALB" {
-  name               = "myEcommerALB"
+resource "aws_lb" "ALB" {
+  name               = "myEcommerceALB"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.Terraform-myEcommerce-ALB-SG.id]
@@ -192,8 +229,8 @@ resource "aws_lb" "myEcommerALB" {
   }
 }
 
-resource "aws_lb_listener" "myEcommerALBListener" {
-  load_balancer_arn = aws_lb.myEcommerALB.arn
+resource "aws_lb_listener" "ALBListener" {
+  load_balancer_arn = aws_lb.ALB.arn
     #port = "443"
     port = "80"
     protocol = "HTTP"
@@ -202,17 +239,17 @@ resource "aws_lb_listener" "myEcommerALBListener" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.myEcommerTargetGroupBlue.arn
+    target_group_arn = aws_lb_target_group.TargetGroupBlue.arn
   }
 }
 
-resource "aws_lb_listener_rule" "myEcommerALBListenerRule" {
-  listener_arn = aws_lb_listener.myEcommerALBListener.arn
+resource "aws_lb_listener_rule" "ALBListenerRule" {
+  listener_arn = aws_lb_listener.ALBListener.arn
   priority     = 1
 
   action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.myEcommerTargetGroupGreen.arn
+    target_group_arn = aws_lb_target_group.TargetGroupGreen.arn
   }
 
   condition {
@@ -229,7 +266,7 @@ resource "aws_lb_listener_rule" "myEcommerALBListenerRule" {
 }
 
 
-resource "aws_lb_target_group" "myEcommerTargetGroupBlue" {
+resource "aws_lb_target_group" "TargetGroupBlue" {
   name     = "myEcommerTargetGroupBlue"
   port     = 80
   protocol = "HTTP"
@@ -248,7 +285,7 @@ resource "aws_lb_target_group" "myEcommerTargetGroupBlue" {
 
 }
 
-resource "aws_lb_target_group" "myEcommerTargetGroupGreen" {
+resource "aws_lb_target_group" "TargetGroupGreen" {
   name     = "myEcommerTargetGroupGreen"
   port     = 80
   protocol = "HTTP"
@@ -269,30 +306,27 @@ resource "aws_lb_target_group" "myEcommerTargetGroupGreen" {
 
 
 #Create ECS cluster
-resource "aws_ecs_cluster" "myECSCluster" {
+resource "aws_ecs_cluster" "Cluster" {
   name  = var.clusterName
   #capacity_providers = []
   }
 
-
-resource "aws_ecs_task_definition" "ecommerceTaskBlue" {
+resource "aws_ecs_task_definition" "TaskBlue" {
   family = "ecommerceTask"
   network_mode = "bridge"
   requires_compatibilities = ["EC2"]
   container_definitions = file("ecommerceContainerDefinition.json")
+ # execution_role_arn = aws_iam_role.Terraform-ECS-Execution-Role.arn
 }
 
-
-
-
-
-resource "aws_ecs_service" "Ecommerce-Service" {
-  name            = "Ecommerce-Service"
-  cluster         = aws_ecs_cluster.myECSCluster.id
-  task_definition = aws_ecs_task_definition.ecommerceTaskBlue.arn
+resource "aws_ecs_service" "Service" {
+  depends_on = [aws_lb_listener_rule.ALBListenerRule]
+  name            = "ecommerceService"
+  cluster         = aws_ecs_cluster.Cluster.id
+  task_definition = aws_ecs_task_definition.TaskBlue.arn
   desired_count   = 2
   #deployment_controller = "EXTERNAL"
-  #iam_role        = aws_iam_role.foo.arn
+  #iam_role        = aws_iam_role.Terraform-ECS-Execution-Role.arn
   #depends_on      = [aws_iam_role_policy.foo]
 
   #ordered_placement_strategy {
@@ -300,11 +334,11 @@ resource "aws_ecs_service" "Ecommerce-Service" {
   #  field = "cpu"
   #}
 
-  #load_balancer {
-  #  target_group_arn = aws_lb_target_group.myEcommerTargetGroupBlue.arn
-  #  container_name   = var.conatinerName
-  #  container_port   = 8080
-  #}
+  load_balancer {
+    target_group_arn = aws_lb_target_group.TargetGroupBlue.arn
+    container_name   = var.conatinerName
+    container_port   = var.containerPort
+  }
 
   #placement_constraints {
   #  type       = "memberOf"

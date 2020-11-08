@@ -1,0 +1,24 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetAuthorizationToken",
+                "ecr:BatchGetImage",
+                "ecs:RegisterContainerInstance",
+                "ec2:Describe*",
+                "ec2:AuthorizeSecurityGroupIngress",
+                "elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
+                "elasticloadbalancing:DeregisterTargets",
+                "elasticloadbalancing:Describe*",
+                "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
+                "elasticloadbalancing:RegisterTargets",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        }
+    ]
+}

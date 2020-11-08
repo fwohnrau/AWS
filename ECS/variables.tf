@@ -42,12 +42,12 @@ variable "conatinerName" {
 }
 
 
-variable "conatinerPort" {
+variable "containerPort" {
   default = 8080
 }
 
 variable "hostPort" {
-  default = 80
+  default = 8080
 }
 
 variable "codeBranch" {
