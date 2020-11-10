@@ -5,7 +5,7 @@ resource "aws_cloudwatch_log_group" "ECSGroup" {
 }
 
 
-#Create Security Groups
+#Create Security Groups 
 resource "aws_security_group" "Autoscalling"{
   name  = "Terraform-Autoscalling-EC2-SG"
   vpc_id = var.vpc
