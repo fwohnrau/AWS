@@ -37,7 +37,7 @@ variable "serviceName" {
 }
 
 variable logGroup {
-  default = "ecommerceTask"
+  default = "Terraform-Ecommerce"
 }
 
 variable "EcommerceRepository" {
@@ -67,8 +67,7 @@ variable "instanceType" {
 }
 
 variable "ec2AMI" {
-  #default = "ami-a1491ad2"
-  default ="ami-0c9ef930279337028"
+  default = "ami-a1491ad2"
 }
 
 variable "keyName" {
@@ -81,7 +80,7 @@ variable "autoscallingMaxSize" {
 }
 
 variable "desiredCapacity" {
-  default = 1
+  default = 2
 }
 
 variable "minCapacity" {
