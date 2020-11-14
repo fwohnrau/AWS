@@ -27,6 +27,22 @@ variable "myGithubCodeStarSourceConnectionArn" {
   default = "arn:aws:codestar-connections:eu-west-1:982779134822:connection/b14693e5-34ce-4e19-a39f-9e11230097ff"
 }
 
+variable "EcommerceRepository" {
+  default = "fwohnrau/eCommerce-django"
+}
+
+variable "codeBranch" {
+  default = "master"
+}
+
+variable "appName" {
+  default = "myEcommerce"
+}
+
+variable "rolePrefixName" {
+  default = "Terraform-myEcommerce"
+}
+
 
 variable "clusterName" {
   default = "ecommerceCluster"
@@ -38,10 +54,6 @@ variable "serviceName" {
 
 variable logGroup {
   default = "ecommerceTask"
-}
-
-variable "EcommerceRepository" {
-  default = "fwohnrau/eCommerce-django"
 }
 
 
@@ -58,9 +70,6 @@ variable "hostPort" {
   default = 8080
 }
 
-variable "codeBranch" {
-  default = "master"
-}
 
 variable "instanceType" {
   default = "t2.micro"
@@ -87,4 +96,3 @@ variable "desiredCapacity" {
 variable "minCapacity" {
   default = 1
 }
-
