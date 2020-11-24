@@ -1,0 +1,26 @@
+{
+  "Table" : "Details",
+  "Key" : "email",
+  "Fields" : [
+     {
+      "firstname": "Fabrice",
+      "lastname": "Wohnrau",
+      "email": "fwohnrau@gmail.com"
+    },
+    {
+      "firstname": "Pamela",
+      "lastname": "Wohnrau",
+      "email": "pwohnrau@gmail.com"
+    },
+    {
+      "firstname": "Laura",
+      "lastname": "Wohnrau",
+      "email": "lwohnrau@gmail.com"
+    },
+    {
+      "firstname": "Sofia",
+      "lastname": "Wohnrau",
+      "email": "swohnrau@gmail.com"
+    }
+  ]
+}

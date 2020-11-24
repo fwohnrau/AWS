@@ -1,0 +1,10 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: S3 Bucket Template
+
+Resources:
+  S3BucketDEV:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: CICD - DEV Repository
+

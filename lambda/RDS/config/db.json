@@ -1,0 +1,9 @@
+{
+     "SOURCE"   : "File",
+     "SECRET"   : "",
+     "DB-HOST"  : "localhost",
+     "DB-PORT"  : "3306",
+     "DB-NAME"  : "Customer",
+     "DB-USER"  : "root",
+     "DB-USER-PWD"   : "rootpwd"
+}

@@ -1,0 +1,68 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+        "LambdaTransactionProcessorRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "IaCLambdaTransactionProcessorRole",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": "logs:CreateLogGroup",
+                            "Resource": "arn:aws:logs:eu-west-1:982779134822:*"
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents"
+                            ],
+                            "Resource": [
+                                "arn:aws:logs:eu-west-1:982779134822:log-group:/aws/lambda/IaCTest:*"
+                            ]
+                        }
+                    ],
+                    
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "AWSLambdaBasicExecutionRole",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "AmazonS3FullAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "s3:*",
+                                    "Resource": [
+                                        "arn:aws:s3:::s3-lambda-fileparsing",
+                                        "arn:aws:s3:::s3-lambda-fileparsing/*"
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}

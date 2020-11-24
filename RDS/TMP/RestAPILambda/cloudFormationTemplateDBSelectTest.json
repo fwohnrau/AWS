@@ -1,0 +1,28 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources":
+    {
+        "IaCLambdaDBSelect":
+        {
+            "Type": "AWS::Lambda::Function",
+            "Properties":
+            {
+                "FunctionName": "IaCLambdaDBSelectNew",
+                "Handler": "DBSelect.lambda_handler",
+                "Role": "arn:aws:iam::982779134822:role/service-role/ReadRDSDB-role-1d91x78s",
+                "VpcConfig":
+                        {
+                         "SecurityGroupIds" : [ "sg-06f19d0fbd76eb5ca" ],
+                          "SubnetIds" : [ "subnet-00d82a9f06aa159ab", "subnet-04a49d2ef162cca08" ]
+                        },
+                "Code":
+                {
+                    "S3Bucket": "mycode-cloudformation",
+                    "S3Key": "Select.zip"
+                },
+                "Runtime": "python3.8",
+                "Timeout": 300
+            }
+        }
+    }
+  }

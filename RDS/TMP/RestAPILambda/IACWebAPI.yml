@@ -1,0 +1,130 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Lambda IaC with API Test
+
+Parameters:
+  LambdaFunctionName:
+    Type: String
+    AllowedPattern: ^[a-zA-Z0-9]+[a-zA-Z0-9-]+[a-zA-Z0-9]+$
+    Default: IaCLambdaDBRead
+
+  S3Bucket:
+    Type: String
+    Default: mycode-cloudformation
+
+  S3Key:
+    Type: String
+    Default: Select.zip
+
+Resources:
+  LambdaDBRead:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref S3Key
+      Runtime: python3.8
+      Description: RDS DB Select
+      FunctionName: !Ref LambdaFunctionName
+      Handler: DBSelect.lambda_handler
+      Role: !GetAtt IACLambdaRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - sg-06f19d0fbd76eb5ca
+        SubnetIds:
+          - subnet-00d82a9f06aa159ab
+          - subnet-04a49d2ef162cca08
+
+  IACLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: IACLambdaRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+
+      Path: "/"
+  lambdaIaCPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: lambdaIaCPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - ec2:CreateNetworkInterface
+              - ec2:DescribeNetworkInterfaces
+              - ec2:DeleteNetworkInterface
+            Resource: "*"
+      Roles:
+        - Ref: IACLambdaRole
+
+ # Register an API in API Gateway
+  ApiGatewayDB:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: IaC Lambda DB Read
+      Description: IaC Lambda DB Read
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  ApiGatewayResourceDB:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref ApiGatewayDB
+      ParentId: !GetAtt
+        - ApiGatewayDB
+        - RootResourceId
+      PathPart: dbread
+
+  # Mark it as a "proxy" integration that forwards all requests to our Lambda function
+  ApiGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn: !GetAtt LambdaDBRead.Arn
+      ResourceId: !Ref ApiGatewayResourceDB
+      RestApiId: !Ref ApiGatewayDB
+
+  #Create an API deployment stage
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGatewayMethod
+    Properties:
+      RestApiId: !Ref ApiGatewayDB
+
+
+  # Grant permission for the newly created API to invoke our Lambda function
+  LambdaApiGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaDBRead.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayDB}/*/*/
+
+
+#Outputs:
+#  ApiUrl:
+#    Value: !Sub
+#      - https://${ApiId}.execute-api.${AWS::Region}.amazonaws.com/${StageName}
+#      - ApiId: !Ref ApiGateway
+#        StageName: !Ref ApiStage
+

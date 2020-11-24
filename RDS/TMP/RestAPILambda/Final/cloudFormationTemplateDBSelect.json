@@ -1,0 +1,76 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources":
+    {
+        "IaCLambdaDBSelect":
+        {
+            "Type": "AWS::Lambda::Function",
+            "Properties":
+            {
+                "FunctionName": "IaCLambdaDBSelectNew",
+                "Handler": "DBSelect.lambda_handler",
+                "Role":
+                {
+                    "Fn::GetAtt": ["IaCLambdaDBSelectRoleNew", "Arn"]
+                },
+                "Code":
+                {
+                    "S3Bucket": "mycode-cloudformation",
+                    "S3Key": "Select.zip"
+                },
+                "Runtime": "python3.8",
+                "Timeout": 300,
+                "VpcConfig":
+                {
+                    "SecurityGroupIds" : [ "sg-06f19d0fbd76eb5ca" ],
+                    "SubnetIds" : [ "subnet-00d82a9f06aa159ab", "subnet-04a49d2ef162cca08" ]
+                }
+            }
+        },
+                "IaCLambdaDBSelectRoleNew":
+        {
+            "Type": "AWS::IAM::Role",
+            "Properties":
+            {
+                "RoleName": "IaCLambdaDBSelectRoleNew",
+                "AssumeRolePolicyDocument":
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": ["lambda.amazonaws.com"]
+                  },
+                  "Action": ["sts:AssumeRole"]
+                    }]
+                },
+
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "AWSLambdaVPCAccessExecutionRole",
+                        "PolicyDocument":
+                        {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "ec2:CreateNetworkInterface",
+                                        "ec2:DescribeNetworkInterfaces",
+                                        "ec2:DeleteNetworkInterface"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+             }
+        }
+
+    }
+  }

@@ -1,0 +1,88 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+        "IaCLambdaTransactionProcessor": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": "IaCLambdaTransactionProcessor",
+                "Handler": "DBSelect.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaTransactionProcessorRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "S3Bucket": "mycode-cloudformation",
+                    "S3Key": "Select.zip"
+                },
+                "Runtime": "python3.8",
+                "Timeout": 300
+            }
+        }
+
+        "LambdaTransactionProcessorRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "IaCLambdaTransactionProcessorRole",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": "logs:CreateLogGroup",
+                            "Resource": "arn:aws:logs:eu-west-1:982779134822:*"
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents"
+                            ],
+                            "Resource": [
+                                "arn:aws:logs:eu-west-1:982779134822:log-group:/aws/lambda/ReadRDSDB:*"
+                            ]
+                        }
+                    ],
+                    
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "AWSLambdaBasicExecutionRole",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "AmazonS3FullAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "s3:*",
+                                    "Resource": [
+                                        "arn:aws:s3:::exchange-data-raw",
+                                        "arn:aws:s3:::exchange-data-raw/*"
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}
